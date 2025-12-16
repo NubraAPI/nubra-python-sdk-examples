@@ -79,7 +79,7 @@ or a `.env` file.
 PHONE_NO=9XXXXXXXXX
 MPIN=XXXX
 NUBRA_TOTP_SECRET=BASE32SECRET   # Required only for full automation
-
+```
 ---
 
 ## Usage
