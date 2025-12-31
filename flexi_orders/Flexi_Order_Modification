@@ -1,0 +1,192 @@
+"""
+Flexi Basket Order Example: Modify FLEXI Basket (Sell Premium – Limit)
+
+This example demonstrates how to MODIFY an existing FLEXI basket order
+after it has been created.
+
+The example covers the full FLEXI lifecycle:
+1. Place an initial FLEXI basket to SELL premium (short straddle)
+2. Define LIMIT entry price, stoploss, and execution time window
+3. Modify the FLEXI basket by updating:
+   - Entry price
+   - Stoploss price
+   - Multiplier
+   - Entry time
+   - Exit time
+
+Important FLEXI Basket Semantics:
+- For FLEXI baskets, `basket_params.order_side` MUST always be
+  `OrderSideEnum.ORDER_SIDE_BUY`
+- This represents the basket-level execution intent required by FLEXI orders
+- The actual strategy direction (BUY / SELL) is defined per-leg inside
+  the `orders` payload using `order_side` for each instrument
+
+Example:
+- SELL straddle / strangle:
+  - basket_params.order_side = ORDER_SIDE_BUY
+  - individual legs use ORDER_SIDE_SELL
+
+Key characteristics:
+- Entry and stoploss prices derived from live order book data
+- Time-bound execution with explicit entry and exit windows
+- Entry, stoploss, multiplier, and timing are dynamically modified
+- Designed for intraday FLEXI strategies
+- Uses Trading API V2
+"""
+
+from time import sleep
+from nubra_python_sdk.start_sdk import InitNubraSdk, NubraEnv
+from nubra_python_sdk.trading.trading_data import NubraTrader
+from nubra_python_sdk.trading.trading_enum import (
+    DeliveryTypeEnum,
+    OrderSideEnum,
+    PriceTypeEnumV2,
+    ExchangeEnum
+)
+from nubra_python_sdk.marketdata.market_data import MarketData
+
+# =========================================================
+# INITIALIZATION
+# =========================================================
+
+# Initialize SDK using environment credentials (.env)
+nubra = InitNubraSdk(NubraEnv.PROD, env_creds=True)
+
+# Trading & Market Data clients
+trade = NubraTrader(nubra, version="V2")
+md = MarketData(nubra)
+
+# Option reference IDs (example: CE & PE legs)
+REF_CE = 956870
+REF_PE = 956857
+QTY = 75  # 1 lot
+
+# =========================================================
+# Helper: Derive LIMIT price from live order book
+# =========================================================
+
+def get_limit_price(ref_id, side):
+    """
+    Fetch best available price from order book
+    to be used as LIMIT price.
+    """
+    quote = md.quote(ref_id=ref_id, levels=5)
+    ob = quote.orderBook
+
+    if side == OrderSideEnum.ORDER_SIDE_BUY:
+        return ob.ask[0].price if ob.ask else ob.last_traded_price
+    else:
+        return ob.bid[0].price if ob.bid else ob.last_traded_price
+
+
+# =========================================================
+# FETCH INITIAL LEG PRICES
+# =========================================================
+
+ce_price = get_limit_price(REF_CE, OrderSideEnum.ORDER_SIDE_SELL)
+pe_price = get_limit_price(REF_PE, OrderSideEnum.ORDER_SIDE_SELL)
+
+print(f"CE Best Ask Price : {ce_price}")
+print(f"PE Best Ask Price : {pe_price}")
+
+# Combined premium with buffer
+entry_price = ce_price + pe_price + 100
+print(f"Initial FLEXI Entry Price: {entry_price}")
+
+# =========================================================
+# PLACE INITIAL FLEXI BASKET (SELL PREMIUM)
+# =========================================================
+
+
+basket_response = trade.flexi_order({
+    "exchange": ExchangeEnum.NSE,
+    "basket_name": "SellPremiumFlexi",
+    "tag": "sell_premium_entry",
+
+    "orders": [
+        {
+            "ref_id": REF_CE,
+            "order_qty": QTY,
+            "order_side": OrderSideEnum.ORDER_SIDE_SELL
+        },
+        {
+            "ref_id": REF_PE,
+            "order_qty": QTY,
+            "order_side": OrderSideEnum.ORDER_SIDE_SELL
+        }
+    ],
+
+    "basket_params": {
+        "order_side": OrderSideEnum.ORDER_SIDE_BUY,
+        "order_delivery_type": DeliveryTypeEnum.ORDER_DELIVERY_TYPE_IDAY,
+        "price_type": PriceTypeEnumV2.LIMIT,
+        "entry_price": entry_price,
+        "multiplier": 1,
+        "stoploss_price": entry_price + 200,
+
+        "entry_time": "2025-12-29T09:10:00.000Z",
+        "exit_time": "2025-12-29T09:30:00.000Z"
+    }
+})
+
+basket_id = basket_response.basket_id
+print(f"\nFlexi Basket Created | Basket ID: {basket_id}")
+
+sleep(2)
+
+# =========================================================
+# FETCH CURRENT FLEXI BASKET STATE
+# =========================================================
+
+basket = trade.get_flexi_order()
+print("Initial Basket State:")
+print(basket)
+
+sleep(4)
+
+# =========================================================
+# MODIFY FLEXI BASKET PARAMETERS
+# =========================================================
+
+# Recalculate prices for modification
+new_ce_price = get_limit_price(REF_CE, OrderSideEnum.ORDER_SIDE_SELL)
+new_pe_price = get_limit_price(REF_PE, OrderSideEnum.ORDER_SIDE_SELL)
+
+new_entry_price = new_ce_price + new_pe_price - 20
+print(f"\nModifying FLEXI Entry Price to: {new_entry_price}")
+
+modify_payload = {
+    "exchange": ExchangeEnum.NSE,
+
+    "orders": [
+        {"ref_id": REF_CE},
+        {"ref_id": REF_PE}
+    ],
+
+    "basket_params": {
+        "order_side": OrderSideEnum.ORDER_SIDE_BUY,
+        "order_delivery_type": DeliveryTypeEnum.ORDER_DELIVERY_TYPE_IDAY,
+        "price_type": PriceTypeEnumV2.LIMIT,
+        "entry_price": new_entry_price,
+        "multiplier": 4,
+        "stoploss_price": entry_price + 300,
+
+        "entry_time": "2025-12-29T09:00:00.000Z",
+        "exit_time": "2025-12-29T09:25:00.000Z"
+    }
+}
+
+trade.mod_flexi_order(
+    basket_id=basket_id,
+    request=modify_payload
+)
+
+sleep(1)
+
+# =========================================================
+# FETCH MODIFIED FLEXI BASKET STATE
+# =========================================================
+
+basket = trade.get_flexi_order()
+print("Modified Basket State:")
+print(basket)
