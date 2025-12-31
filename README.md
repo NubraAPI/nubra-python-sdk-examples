@@ -16,6 +16,7 @@ All examples use the official Nubra Python SDK and are designed to be:
 - Authentication (TOTP, environment-based login)
 - Place, modify, and cancel orders
 - Basket & multi-order execution
+- Flexi Orders for Options Strategies
 - Market data (LTP, OHLC, historical data)
 - Margin and risk calculations
 
