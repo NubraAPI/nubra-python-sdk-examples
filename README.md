@@ -40,6 +40,7 @@ All examples use the official Nubra Python SDK and are designed to be:
 - **Full API Documentation**  
   https://nubra.io/products/api/docs/
 
+- **Access Our Offfcial Python SDK at:** https://github.com/NubraAPI/nubra-python-sdk
 ---
 
 ## Notes
