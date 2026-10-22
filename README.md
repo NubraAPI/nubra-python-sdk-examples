@@ -1,4 +1,4 @@
-# Nubra Python SDK Examples
+# Nubra Trading Workflow Examples Using Python SDK
 
 This repository contains **runnable, production-style examples** demonstrating how to use the **Nubra Python SDK** for Trading and Market Data APIs.
 
